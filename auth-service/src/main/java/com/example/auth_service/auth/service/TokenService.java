@@ -1,4 +1,4 @@
-package com.example.auth_service.service;
+package com.example.auth_service.auth.service;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
