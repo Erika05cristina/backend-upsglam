@@ -5,6 +5,9 @@ spring:
   application:
     name: auth-service
 
+jwt:
+  secret: ${JWT_SECRET}
+
 firebase:
   service-account-path: classpath:firebase-key.json
 

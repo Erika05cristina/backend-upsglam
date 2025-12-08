@@ -2,11 +2,17 @@ package com.example.auth_service.auth.controller;
 
 import com.example.auth_service.auth.dto.RegisterRequest;
 import com.example.auth_service.auth.service.AuthService;
+import com.example.auth_service.auth.dto.LoginRequest;
+
+
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
+
+import com.example.auth_service.auth.dto.LoginResponse;
 
 @RestController
 @RequestMapping("/auth")
@@ -28,6 +34,10 @@ public class AuthController {
                         "userName", user.getDisplayName(),
                         "message", "Usuario creado exitosamente en Firebase"
                 ));
+    }
+    @PostMapping("/login")
+    public Mono<LoginResponse> login(@RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 
     @GetMapping("/test")
