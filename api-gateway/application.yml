@@ -17,6 +17,14 @@ spring:
             - Path=/auth/**   # Todo lo que empiece con /auth va a auth-service
           filters:
             - StripPrefix=0   # No cambiamos el path
+        # 2) Ruta hacia el POST-SERVICE
+        - id: post-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/posts/**  # Todo lo que empiece con /posts va a post-service
+          filters:
+            - StripPrefix=0   # No cambiamos el path
+
 
 jwt:
   secret: ${JWT_SECRET}   # Usa la misma variable de entorno que en auth-service
