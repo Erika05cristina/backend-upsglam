@@ -1,0 +1,79 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+gradle-wrapper.jar
+.gradletasknamecache
+
+# Java
+*.class
+*.jar
+*.war
+*.nar
+*.zip
+*.tar.gz
+*.rar
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+*.iws
+*.ipr
+*.classpath
+.project
+.settings/
+.factorypath
+
+# Spring Boot
+application-local.properties
+application-dev.properties
+application-prod.properties
+application.yml.local
+
+# Maven/Gradle
+target/
+.m2/
+pom.xml.tag
+pom.xml.amd64.tag
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Firebase
+firebase-key.json
+*-key.json
+serviceAccountKey.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if using any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# System files
+.AppleDouble
+.LSOverride
+._*
+
+auth-service/src/main/resources/firebase-key.json
