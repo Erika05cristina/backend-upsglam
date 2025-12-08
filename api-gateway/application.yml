@@ -23,7 +23,14 @@ spring:
           predicates:
             - Path=/posts/**  # Todo lo que empiece con /posts va a post-service
           filters:
+        # 3) Ruta hacia el IMAGE-SERVICE
+        - id: image-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/images/**  # Todo lo que empiece con /images va a image-service
+          filters:
             - StripPrefix=0   # No cambiamos el path
+          
 
 
 jwt:

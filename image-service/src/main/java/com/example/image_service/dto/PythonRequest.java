@@ -5,7 +5,8 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class ImageUploadResponse {
-    private String originalUrl;
-    private String processedUrl;
+public class PythonRequest {
+    private String imageBase64;
+    private int maskSize;
+    private String filter;
 }

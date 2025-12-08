@@ -9,11 +9,16 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class WebClientConfig {
 
     @Bean
-    public WebClient supabaseClient(
-            @Value("${supabase.url}") String url) {
-
+    public WebClient supabaseClient(@Value("${supabase.url}") String url) {
         return WebClient.builder()
                 .baseUrl(url + "/storage/v1")
                 .build();
     }
-} 
+
+    @Bean
+    public WebClient pythonClient(@Value("${python.url}") String pythonUrl) {
+        return WebClient.builder()
+                .baseUrl(pythonUrl)
+                .build();
+    }
+}
