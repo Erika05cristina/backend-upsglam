@@ -4,5 +4,7 @@ public record LoginResponse(
         String uid,
         String email,
         String jwt,
+        String firebaseIdToken,
+        String refreshToken,
         String message
 ) {}
