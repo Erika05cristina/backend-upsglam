@@ -36,8 +36,8 @@ spring:
             - Path=/comments/**  # Todo lo que empiece con /comments va a comment-service
           filters:
             - StripPrefix=0   # No cambiamos el path
-        # 5) Ruta hacia el COMMENT-SERVICE
-        - id: comment-service
+        # 5) Ruta hacia el USERS-SERVICE
+        - id: users-service
           uri: http://localhost:8085
           predicates:
             - Path=/users/**  # Todo lo que empiece con /users va a users-service

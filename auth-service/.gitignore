@@ -1,79 +1,37 @@
-# Gradle
-.gradle/
+HELP.md
+.gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
-gradle-wrapper.jar
-.gradletasknamecache
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-# Java
-*.class
-*.jar
-*.war
-*.nar
-*.zip
-*.tar.gz
-*.rar
-*.exe
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.DS_Store
-*.iml
-*.iws
-*.ipr
-*.classpath
-.project
-.settings/
+### STS ###
+.apt_generated
+.classpath
 .factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
 
-# Spring Boot
-application-local.properties
-application-dev.properties
-application-prod.properties
-application.yml.local
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
 
-# Maven/Gradle
-target/
-.m2/
-pom.xml.tag
-pom.xml.amd64.tag
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
 
-# Logs
-logs/
-*.log
-*.log.*
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Firebase
-firebase-key.json
-*-key.json
-serviceAccountKey.json
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Node (if using any)
-node_modules/
-npm-debug.log
-yarn-error.log
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# System files
-.AppleDouble
-.LSOverride
-._*
-
-auth-service/src/main/resources/firebase-key.json
+### VS Code ###
+.vscode/
