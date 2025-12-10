@@ -4,11 +4,14 @@ import java.util.Base64;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -77,10 +80,9 @@ public class ImageService {
     // ===============================================================
     // 3) Upload + Process + Upload processed image
     // ===============================================================
-    public Mono<ImageUploadResponse> uploadAndProcess(MultipartFile file, int mask, String filter) {
+    public Mono<ImageUploadResponse> uploadAndProcess(FilePart file, int mask, String filter) {
 
-        return Mono.fromCallable(file::getBytes)
-                .subscribeOn(Schedulers.boundedElastic())
+        return filePartToBytes(file)
                 .flatMap(originalBytes -> {
 
                     String originalName = UUID.randomUUID() + "-original.png";
@@ -104,32 +106,90 @@ public class ImageService {
     // ===============================================================
     // 4) Upload Avatar (solo subir imagen, sin python)
     // ===============================================================
-    public Mono<AvatarUploadResponse> uploadAvatar(MultipartFile file, String userId) {
+    public Mono<AvatarUploadResponse> uploadAvatar(FilePart file, String userId) {
 
         if (!StringUtils.hasText(userId)) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "El identificador de usuario es obligatorio"));
         }
 
-        // Validación tamaño máx 5 MB
-        if (file.getSize() > 5 * 1024 * 1024) {
-            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "El archivo excede el límite de 5MB"));
-        }
+        HttpHeaders headers = file.headers();
+        MediaType contentType = headers.getContentType();
+        String originalFilename = file.filename();
 
-        // Validación tipo MIME
-        String contentType = file.getContentType();
-        if (!"image/png".equals(contentType) && !"image/jpeg".equals(contentType)) {
+        if (!isSupportedImage(contentType, originalFilename)) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se permiten PNG o JPG"));
         }
 
-        return Mono.fromCallable(file::getBytes)
-                .subscribeOn(Schedulers.boundedElastic())
+        return filePartToBytes(file)
                 .flatMap(bytes -> {
+                    // Validación tamaño máx 5 MB
+                    if (bytes.length > 5 * 1024 * 1024) {
+                        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "El archivo excede el límite de 5MB"));
+                    }
 
-                    String ext = contentType.equals("image/png") ? ".png" : ".jpg";
+                    String ext = resolveExtension(contentType, originalFilename);
                     String fileName = "avatars/" + userId + "/" + UUID.randomUUID() + ext;
 
                     return uploadBytes(bytes, fileName)
                             .map(url -> new AvatarUploadResponse(url, System.currentTimeMillis()));
                 });
+    }
+
+    private Mono<byte[]> filePartToBytes(FilePart file) {
+        return DataBufferUtils.join(file.content())
+                .map(this::toByteArray)
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private byte[] toByteArray(DataBuffer buffer) {
+        try {
+            byte[] bytes = new byte[buffer.readableByteCount()];
+            buffer.read(bytes);
+            return bytes;
+        } finally {
+            DataBufferUtils.release(buffer);
+        }
+    }
+
+    private boolean isSupportedImage(MediaType contentType, String filename) {
+        if (contentType != null) {
+            if (MediaType.IMAGE_PNG.isCompatibleWith(contentType) || MediaType.IMAGE_JPEG.isCompatibleWith(contentType)) {
+                return true;
+            }
+        }
+
+        if (filename != null) {
+            String lower = filename.toLowerCase();
+            return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg");
+        }
+
+        return false;
+    }
+
+    private String resolveExtension(MediaType contentType, String filename) {
+        if (contentType != null) {
+            if (MediaType.IMAGE_PNG.isCompatibleWith(contentType)) {
+                return ".png";
+            }
+            if (MediaType.IMAGE_JPEG.isCompatibleWith(contentType)) {
+                return ".jpg";
+            }
+        }
+
+        if (filename != null) {
+            String lower = filename.toLowerCase();
+            if (lower.endsWith(".png")) {
+                return ".png";
+            }
+            if (lower.endsWith(".jpeg")) {
+                return ".jpg";
+            }
+            if (lower.endsWith(".jpg")) {
+                return ".jpg";
+            }
+        }
+
+        // Fallback seguro
+        return ".jpg";
     }
 }
