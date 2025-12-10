@@ -25,10 +25,11 @@ public class ImageController {
     )
     public Mono<ImageUploadResponse> uploadImage(
             @RequestPart("file") FilePart file,
-            @RequestPart("mask") int mask,
+            @RequestPart("mask") String mask,
             @RequestPart("filter") String filter
     ) {
-        return imageService.uploadAndProcess(file, mask, filter);
+        int maskInt = Integer.parseInt(mask);
+        return imageService.uploadAndProcess(file, maskInt, filter);
     }
 
     // 2) NUEVO: subir avatar de usuario

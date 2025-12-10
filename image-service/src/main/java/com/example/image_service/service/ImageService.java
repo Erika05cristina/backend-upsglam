@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.web.reactive.function.BodyInserters;
 
 import com.example.image_service.dto.ImageUploadResponse;
 import com.example.image_service.dto.PythonRequest;
@@ -46,18 +49,44 @@ public class ImageService {
     // ===============================================================
     private Mono<byte[]> processWithPython(byte[] imageBytes, int mask, String filter) {
 
-        String base64 = Base64.getEncoder().encodeToString(imageBytes);
-        PythonRequest req = new PythonRequest(base64, mask, filter);
+        // Normalizamos y validamos el filtro (solo estos 4)
+        String filterType = filter.toLowerCase();
+        if (!filterType.equals("mean") &&
+            !filterType.equals("emboss") &&
+            !filterType.equals("gaussian") &&
+            !filterType.equals("sobel")) {
+
+            return Mono.error(new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Filtro no permitido. Solo: mean, emboss, gaussian, sobel"
+            ));
+        }
+
+        // Construimos el multipart/form-data que espera FastAPI:
+        //   image: archivo
+        //   filter_type: string
+        //   kernel_size: int
+        MultipartBodyBuilder builder = new MultipartBodyBuilder();
+
+        builder
+            .part("image", new ByteArrayResource(imageBytes) {
+                @Override
+                public String getFilename() {
+                    return "upload.png"; // nombre ficticio
+                }
+            })
+            .contentType(MediaType.APPLICATION_OCTET_STREAM);
+
+        builder.part("filter_type", filterType);
+        builder.part("kernel_size", String.valueOf(mask));
 
         return pythonClient.post()
-                .uri("/process")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(req)
+                .uri("/api/convolucion")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(builder.build()))
                 .retrieve()
-                .bodyToMono(PythonResponse.class)
-                .map(resp -> Base64.getDecoder().decode(resp.getProcessedImageBase64()));
+                .bodyToMono(byte[].class);  // 🔴 AQUÍ: esperamos bytes de imagen, no JSON
     }
-
 
     // ===============================================================
     // 2) Subir bytes directamente a Supabase
