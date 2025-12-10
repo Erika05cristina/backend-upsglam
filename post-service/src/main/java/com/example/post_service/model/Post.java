@@ -7,10 +7,6 @@ public class Post {
     private String id;
     private String userId;
     private String content;
-    private String imageUrl;   // URL pública devuelta por Supabase
+    private String imageUrl;
     private long createdAt;
-
-    public void setId(String id) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
 }

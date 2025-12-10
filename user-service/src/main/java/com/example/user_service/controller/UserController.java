@@ -1,5 +1,6 @@
 package com.example.user_service.controller;
 
+import com.example.user_service.dto.AddAvatarRequest;
 import com.example.user_service.dto.CreateUserRequest;
 import com.example.user_service.dto.UpdateUserRequest;
 import com.example.user_service.model.User;
@@ -34,5 +35,13 @@ public class UserController {
     @GetMapping("/{id}")
     public Mono<User> getUser(@PathVariable String id) {
         return service.getUser(id);
+    }
+
+    @PostMapping("/{id}/avatars")
+    public Mono<User> addAvatar(
+            @PathVariable String id,
+            @RequestBody AddAvatarRequest request
+    ) {
+        return service.addAvatar(id, request);
     }
 }

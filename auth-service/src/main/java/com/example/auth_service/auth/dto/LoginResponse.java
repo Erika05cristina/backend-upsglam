@@ -6,5 +6,6 @@ public record LoginResponse(
         String jwt,
         String firebaseIdToken,
         String refreshToken,
-        String message
+        String message,
+        UserProfile profile
 ) {}

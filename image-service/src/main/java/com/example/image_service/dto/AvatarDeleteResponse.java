@@ -5,8 +5,6 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class PythonRequest {
-	private String imageBase64;
-	private int maskSize;
-	private String filter;
+public class AvatarDeleteResponse {
+    private boolean deleted;
 }
