@@ -7,6 +7,136 @@ from pycuda.compiler import SourceModule
 
 from cuda_service.cuda.mask_builder import generate_sobel_masks
 
+UPS_FILTER_KERNEL_CODE = r"""
+__global__ void ups_color_highlight(
+    unsigned char* img,   // imagen RGB de entrada
+    unsigned char* out,   // imagen RGB de salida
+    int width,
+    int height,
+    int pitch             // width * 3
+){
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x >= width || y >= height) return;
+
+    int idx = y * pitch + x * 3;
+
+    // Leer RGB (Pillow da RGB, no BGR)
+    unsigned char r8 = img[idx + 0];
+    unsigned char g8 = img[idx + 1];
+    unsigned char b8 = img[idx + 2];
+
+    // Normalizar a [0,1]
+    float r = r8 / 255.0f;
+    float g = g8 / 255.0f;
+    float b = b8 / 255.0f;
+
+    // ---- RGB -> HSV (formato tipo OpenCV) ----
+    float maxv = fmaxf(r, fmaxf(g, b));
+    float minv = fminf(r, fminf(g, b));
+    float delta = maxv - minv;
+
+    float H_deg = 0.0f;
+    if (delta > 1e-6f) {
+        if (maxv == r) {
+            H_deg = 60.0f * fmodf(((g - b) / delta), 6.0f);
+        } else if (maxv == g) {
+            H_deg = 60.0f * (((b - r) / delta) + 2.0f);
+        } else { // maxv == b
+            H_deg = 60.0f * (((r - g) / delta) + 4.0f);
+        }
+        if (H_deg < 0.0f) H_deg += 360.0f;
+    }
+
+    float S = (maxv <= 0.0f) ? 0.0f : (delta / maxv);
+    float V = maxv;
+
+    // Escala tipo OpenCV: H [0,179], S [0,255], V [0,255]
+    unsigned char H = (unsigned char)(H_deg / 2.0f + 0.5f);
+    unsigned char S8 = (unsigned char)(S * 255.0f + 0.5f);
+    unsigned char V8 = (unsigned char)(V * 255.0f + 0.5f);
+
+    // Rango azul
+    bool in_blue =
+        (H >= 90  && H <= 140) &&
+        (S8 >= 50  && S8 <= 255) &&
+        (V8 >= 40  && V8 <= 255);
+
+    // Rango amarillo
+    bool in_yellow =
+        (H >= 15  && H <= 40) &&
+        (S8 >= 70  && S8 <= 255) &&
+        (V8 >= 70  && V8 <= 255);
+
+    if (in_blue || in_yellow) {
+        // Mantener color original
+        out[idx + 0] = r8;
+        out[idx + 1] = g8;
+        out[idx + 2] = b8;
+    } else {
+        // Convertir a gris (coeficientes típicos en RGB)
+        unsigned char gray = (unsigned char)(0.299f * r8 + 0.587f * g8 + 0.114f * b8);
+        out[idx + 0] = gray;
+        out[idx + 1] = gray;
+        out[idx + 2] = gray;
+    }
+}
+"""
+
+_ups_mod = SourceModule(UPS_FILTER_KERNEL_CODE)
+_ups_filter_gpu = _ups_mod.get_function("ups_color_highlight")
+
+def run_ups_filter_gpu(
+    img_rgb_u8: np.ndarray,
+    threads_x: int,
+    threads_y: int,
+    blocks_x: int,
+    blocks_y: int,
+):
+    """
+    Aplica el filtro institucional (solo azul y amarillo en color,
+    resto en gris) sobre una imagen RGB uint8 (H, W, 3).
+    Devuelve (out_rgb_u8, gpu_time_ms).
+    """
+    if img_rgb_u8.ndim != 3 or img_rgb_u8.shape[2] != 3:
+        raise ValueError("Imagen debe ser RGB (H, W, 3).")
+
+    img_rgb_u8 = np.ascontiguousarray(img_rgb_u8.astype(np.uint8))
+    H, W, _ = img_rgb_u8.shape
+    pitch = W * 3
+
+    # Reservar memoria en GPU
+    d_in = drv.mem_alloc(img_rgb_u8.nbytes)
+    d_out = drv.mem_alloc(img_rgb_u8.nbytes)
+
+    drv.memcpy_htod(d_in, img_rgb_u8)
+
+    block = (threads_x, threads_y, 1)
+    grid = (blocks_x, blocks_y, 1)
+
+    start_evt = drv.Event()
+    end_evt = drv.Event()
+
+    start_evt.record()
+    _ups_filter_gpu(
+        d_in,
+        d_out,
+        np.int32(W),
+        np.int32(H),
+        np.int32(pitch),
+        block=block,
+        grid=grid
+    )
+    end_evt.record()
+    end_evt.synchronize()
+    gpu_ms = start_evt.time_till(end_evt)
+
+    out_rgb = np.empty_like(img_rgb_u8)
+    drv.memcpy_dtoh(out_rgb, d_out)
+
+    return out_rgb, gpu_ms
+
 # -------------------------------------------------------------------
 #  CÓDIGO CUDA PARA SOBEL
 # -------------------------------------------------------------------

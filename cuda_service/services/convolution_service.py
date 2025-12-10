@@ -15,7 +15,7 @@ from cuda_service.cuda.kernels import (
     run_convolution_gray_gpu,
     run_convolution_rgb_gpu,
     run_mean_rgb_gpu,
-    # run_ups_filter_gpu,  # 👈 YA NO SE USA
+    run_ups_filter_gpu
 )
 
 
@@ -51,10 +51,10 @@ async def process_convolution(
 
     # 2) Validar filtro
     filter_type = filter_type.lower()
-    if filter_type not in {"gaussian", "sobel", "emboss", "mean"}:
+    if filter_type not in {"gaussian", "sobel", "emboss", "mean", "ups"}:
         raise HTTPException(
             status_code=400,
-            detail="filter_type debe ser uno de: 'gaussian', 'sobel', 'emboss' o 'mean'."
+            detail="filter_type debe ser uno de: 'gaussian', 'sobel', 'emboss', 'mean' o 'ups'."
         )
 
     # 3) Validar que el kernel quepa en la imagen
@@ -150,6 +150,27 @@ async def process_convolution(
             blocks_x=blocks_x,
             blocks_y=blocks_y,
         )
+
+    elif filter_type == "ups":
+        # --- FILTRO INSTITUCIONAL UPS (RGB) ---
+        image.file.seek(0)
+        pil_img = Image.open(image.file).convert("RGB")
+        img_rgb_u8 = np.array(pil_img).astype(np.uint8)
+
+        out_rgb_u8, gpu_time_ms = run_ups_filter_gpu(
+            img_rgb_u8=img_rgb_u8,
+            threads_x=threads_x,
+            threads_y=threads_y,
+            blocks_x=blocks_x,
+            blocks_y=blocks_y,
+        )
+
+        out_u8 = out_rgb_u8
+
+        # kernel_preview solo para info
+        kernel_preview = {
+            "description": "UPS institutional color filter (blue+yellow)"
+        }
 
     else:
         # --- EMBOSS en escala de grises ---

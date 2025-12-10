@@ -19,6 +19,12 @@ public class WebClientConfig {
     public WebClient pythonClient(@Value("${python.url}") String pythonUrl) {
         return WebClient.builder()
                 .baseUrl(pythonUrl)
+                .codecs(configurer ->
+                        configurer
+                                .defaultCodecs()
+                                // por ejemplo 10 MB
+                                .maxInMemorySize(10 * 1024 * 1024)
+                )
                 .build();
     }
 }

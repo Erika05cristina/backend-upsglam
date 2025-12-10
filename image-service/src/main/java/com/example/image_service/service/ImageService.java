@@ -49,35 +49,19 @@ public class ImageService {
     // ===============================================================
     private Mono<byte[]> processWithPython(byte[] imageBytes, int mask, String filter) {
 
-        // Normalizamos y validamos el filtro (solo estos 4)
-        String filterType = filter.toLowerCase();
-        if (!filterType.equals("mean") &&
-            !filterType.equals("emboss") &&
-            !filterType.equals("gaussian") &&
-            !filterType.equals("sobel")) {
-
-            return Mono.error(new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Filtro no permitido. Solo: mean, emboss, gaussian, sobel"
-            ));
-        }
-
-        // Construimos el multipart/form-data que espera FastAPI:
-        //   image: archivo
-        //   filter_type: string
-        //   kernel_size: int
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
 
-        builder
-            .part("image", new ByteArrayResource(imageBytes) {
-                @Override
-                public String getFilename() {
-                    return "upload.png"; // nombre ficticio
-                }
-            })
-            .contentType(MediaType.APPLICATION_OCTET_STREAM);
+        // nombre de la parte "image" debe coincidir con FastAPI
+        builder.part("image", imageBytes)
+            .filename("image.png")
+            .contentType(MediaType.IMAGE_PNG);
 
-        builder.part("filter_type", filterType);
+        // FastAPI: filter_type: str = Form(...)
+        builder.part("filter_type", filter);
+
+        // FastAPI: kernel_size: int = Form(...)
+        // Para el filtro "ups" puedes mandar un valor dummy (por ejemplo 3),
+        // aunque no lo uses en CUDA.
         builder.part("kernel_size", String.valueOf(mask));
 
         return pythonClient.post()
@@ -85,7 +69,8 @@ public class ImageService {
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(builder.build()))
                 .retrieve()
-                .bodyToMono(byte[].class);  // 🔴 AQUÍ: esperamos bytes de imagen, no JSON
+                // ahora esperamos la imagen como bytes (PNG)
+                .bodyToMono(byte[].class);
     }
 
     // ===============================================================
