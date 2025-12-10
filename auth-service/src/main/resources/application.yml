@@ -14,3 +14,4 @@ firebase:
 
 user-service:
   base-url: ${USER_SERVICE_URL:http://localhost:8085}
+  default-avatar-url: ${USER_SERVICE_DEFAULT_AVATAR:https://ui-avatars.com/api/?name=%s&background=222831&color=f9fafb}

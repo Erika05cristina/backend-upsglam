@@ -19,6 +19,10 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -33,11 +37,13 @@ public class AuthService {
     private final UserServiceClient userServiceClient;
     private final WebClient firebaseWebClient;
     private final String firebaseApiKey;
+    private final String defaultAvatarUrl;
 
     public AuthService(JwtService jwtService,
                        UserServiceClient userServiceClient,
                        WebClient.Builder webClientBuilder,
-                       @Value("${firebase.api-key}") String firebaseApiKey) {
+                       @Value("${firebase.api-key}") String firebaseApiKey,
+                       @Value("${user-service.default-avatar-url:}") String defaultAvatarUrl) {
         this.jwtService = jwtService;
         this.userServiceClient = userServiceClient;
         this.firebaseApiKey = Objects.requireNonNull(firebaseApiKey, "firebase.api-key must be configured");
@@ -47,6 +53,7 @@ public class AuthService {
         this.firebaseWebClient = webClientBuilder
                 .baseUrl(FIREBASE_IDENTITY_BASE_URL)
                 .build();
+        this.defaultAvatarUrl = defaultAvatarUrl;
     }
 
     // ==========================
@@ -55,16 +62,23 @@ public class AuthService {
     public Mono<UserRecord> register(RegisterRequest request) {
         return Mono.fromCallable(() -> {
             UserRecord.CreateRequest firebaseRequest = new UserRecord.CreateRequest()
-                    .setEmail(request.email())
-                    .setPassword(request.password())
-                    .setDisplayName(request.userName());
+                .setEmail(request.email())
+                .setPassword(request.password())
+                .setDisplayName(request.userName());
 
             return FirebaseAuth.getInstance().createUser(firebaseRequest);
-        }).flatMap(userRecord -> userServiceClient
-                .createOrUpdateProfile(userRecord.getUid(), request)
-                .doOnError(error -> log.warn("No se pudo crear el perfil en user-service para el uid {}", userRecord.getUid(), error))
+        }).flatMap(userRecord -> {
+            String uid = userRecord.getUid();
+            String displayName = request.userName();
+            String username = sanitizeUsername(displayName, uid);
+            String avatarUrl = resolveAvatarUrl(displayName);
+
+            return userServiceClient
+                .createProfile(uid, displayName, username, null, avatarUrl)
+                .doOnError(error -> log.warn("No se pudo crear el perfil en user-service para el uid {}", uid, error))
                 .onErrorResume(error -> Mono.empty())
-                .thenReturn(userRecord));
+                .thenReturn(userRecord);
+        });
     }
 
     // ==========================
@@ -100,10 +114,20 @@ public class AuthService {
                             return Mono.error(new FirebaseAuthenticationException(reason));
                         }))
                 .bodyToMono(FirebaseSignInResponse.class)
-                .flatMap(firebaseResponse -> userServiceClient
-                        .fetchProfile(firebaseResponse.localId())
-                        .map(profile -> buildLoginResponse(firebaseResponse, profile))
-                        .switchIfEmpty(Mono.fromSupplier(() -> buildLoginResponse(firebaseResponse, null))));
+                .flatMap(firebaseResponse -> {
+                    String uid = firebaseResponse.localId();
+                    String name = determineDisplayName(firebaseResponse);
+                    String username = determineUsername(firebaseResponse);
+                    String avatarUrl = resolveAvatarUrl(name);
+
+                    Mono<UserProfile> profileMono = userServiceClient
+                            .fetchProfile(uid)
+                            .switchIfEmpty(userServiceClient
+                                    .createProfile(uid, name, username, null, avatarUrl)
+                                    .switchIfEmpty(Mono.empty()));
+
+                    return mapToLoginResponse(firebaseResponse, profileMono);
+                });
     }
 
     private LoginResponse buildLoginResponse(FirebaseSignInResponse firebaseResponse, UserProfile profile) {
@@ -121,5 +145,80 @@ public class AuthService {
                 "Login exitoso",
                 profile
         );
+    }
+
+    private Mono<LoginResponse> mapToLoginResponse(FirebaseSignInResponse firebaseResponse, Mono<UserProfile> profileMono) {
+        return profileMono
+                .map(profile -> buildLoginResponse(firebaseResponse, profile))
+                .switchIfEmpty(Mono.fromSupplier(() -> buildLoginResponse(firebaseResponse, null)));
+    }
+
+    private String determineDisplayName(FirebaseSignInResponse response) {
+        if (StringUtils.hasText(response.displayName())) {
+            return response.displayName();
+        }
+        String email = response.email();
+        if (StringUtils.hasText(email)) {
+            return extractLocalPart(email);
+        }
+        return "Usuario";
+    }
+
+    private String determineUsername(FirebaseSignInResponse response) {
+        String base = null;
+        if (StringUtils.hasText(response.email())) {
+            base = extractLocalPart(response.email());
+        }
+        if (!StringUtils.hasText(base) && StringUtils.hasText(response.displayName())) {
+            base = response.displayName();
+        }
+        return sanitizeUsername(base, response.localId());
+    }
+
+    private String sanitizeUsername(String candidate, String fallbackSeed) {
+        String base = StringUtils.hasText(candidate) ? candidate : fallbackSeed;
+        if (!StringUtils.hasText(base)) {
+            base = "user";
+        }
+
+        String normalized = Normalizer.normalize(base, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^A-Za-z0-9]", "")
+                .toLowerCase(Locale.ROOT);
+
+        if (StringUtils.hasText(normalized)) {
+            return normalized;
+        }
+
+        String fallback = StringUtils.hasText(fallbackSeed) ? fallbackSeed : "user";
+        fallback = fallback.replaceAll("[^A-Za-z0-9]", "");
+        if (fallback.length() > 8) {
+            fallback = fallback.substring(0, 8);
+        }
+        return StringUtils.hasText(fallback) ? "user" + fallback : "user";
+    }
+
+    private String resolveAvatarUrl(String seed) {
+        if (!StringUtils.hasText(defaultAvatarUrl)) {
+            return null;
+        }
+        String value = StringUtils.hasText(seed) ? seed : "User";
+        if (defaultAvatarUrl.contains("%s")) {
+            String encoded = urlEncode(value);
+            return String.format(Locale.ROOT, defaultAvatarUrl, encoded);
+        }
+        return defaultAvatarUrl;
+    }
+
+    private String extractLocalPart(String email) {
+        int atIndex = email.indexOf('@');
+        if (atIndex > 0) {
+            return email.substring(0, atIndex);
+        }
+        return email;
+    }
+
+    private String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }
