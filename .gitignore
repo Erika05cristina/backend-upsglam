@@ -75,3 +75,7 @@ yarn-error.log
 .AppleDouble
 .LSOverride
 ._*
+
+# Python cache
+__pycache__/
+*.pyc

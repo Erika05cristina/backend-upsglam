@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.web.reactive.function.BodyInserters;
 
 import com.example.image_service.dto.ImageUploadResponse;
 import com.example.image_service.dto.PythonRequest;
@@ -46,18 +49,29 @@ public class ImageService {
     // ===============================================================
     private Mono<byte[]> processWithPython(byte[] imageBytes, int mask, String filter) {
 
-        String base64 = Base64.getEncoder().encodeToString(imageBytes);
-        PythonRequest req = new PythonRequest(base64, mask, filter);
+        MultipartBodyBuilder builder = new MultipartBodyBuilder();
+
+        // nombre de la parte "image" debe coincidir con FastAPI
+        builder.part("image", imageBytes)
+            .filename("image.png")
+            .contentType(MediaType.IMAGE_PNG);
+
+        // FastAPI: filter_type: str = Form(...)
+        builder.part("filter_type", filter);
+
+        // FastAPI: kernel_size: int = Form(...)
+        // Para el filtro "ups" puedes mandar un valor dummy (por ejemplo 3),
+        // aunque no lo uses en CUDA.
+        builder.part("kernel_size", String.valueOf(mask));
 
         return pythonClient.post()
-                .uri("/process")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(req)
+                .uri("/api/convolucion")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(builder.build()))
                 .retrieve()
-                .bodyToMono(PythonResponse.class)
-                .map(resp -> Base64.getDecoder().decode(resp.getProcessedImageBase64()));
+                // ahora esperamos la imagen como bytes (PNG)
+                .bodyToMono(byte[].class);
     }
-
 
     // ===============================================================
     // 2) Subir bytes directamente a Supabase
