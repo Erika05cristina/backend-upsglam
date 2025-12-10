@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+  cuda-service:
+    build:
+      context: ./cuda-service
+    container_name: cuda-service
+    networks:
+      - upsglam-net
+    ports:
+      - "5000:5000"
+
+  post-service:
+    build:
+      context: ./post-service
+    container_name: post-service
+    environment:
+      FIREBASE_CREDENTIALS_LOCATION: "file:/secrets/firebase-key.json"
+    volumes:
+      - ./firebase-key.json:/secrets/firebase-key.json:ro
+    networks:
+      - upsglam-net
+    ports:
+      - "8082:8082"
+
+  user-service:
+    build:
+      context: ./user-service
+    container_name: user-service
+    environment:
+      FIREBASE_CREDENTIALS_LOCATION: "file:/secrets/firebase-key.json"
+    volumes:
+      - ./firebase-key.json:/secrets/firebase-key.json:ro
+    networks:
+      - upsglam-net
+    ports:
+      - "8085:8085"
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: auth-service
+    depends_on:
+      - user-service
+    environment:
+      JWT_SECRET: "${JWT_SECRET:-change-me}"
+      FIREBASE_SERVICE_ACCOUNT_PATH: "file:/secrets/firebase-key.json"
+      USER_SERVICE_URL: "http://user-service:8085"
+    volumes:
+      - ./firebase-key.json:/secrets/firebase-key.json:ro
+    networks:
+      - upsglam-net
+    ports:
+      - "8081:8081"
+
+  image-service:
+    build:
+      context: ./image-service
+    container_name: image-service
+    depends_on:
+      - cuda-service
+      - post-service
+    environment:
+      SUPABASE_URL: "${SUPABASE_URL:-https://jxmuivyjhglqrixbrsiw.supabase.co}"
+      SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4bXVpdnlqaGdscXJpeGJyc2l3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTE3MDE3MCwiZXhwIjoyMDgwNzQ2MTcwfQ.S8SjWlfT7BRYcxCkUsstsvrZthQ8sOj_ZV5-w1Kje3w}"
+      SUPABASE_BUCKET: "${SUPABASE_BUCKET:-images}"
+      PYTHON_URL: "http://cuda-service:5000"
+    networks:
+      - upsglam-net
+    ports:
+      - "8083:8083"
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: api-gateway
+    depends_on:
+      - auth-service
+      - post-service
+      - image-service
+      - user-service
+    environment:
+      JWT_SECRET: "${JWT_SECRET:-change-me}"
+      POST_SERVICE_URL: "http://post-service:8082"
+      IMAGE_SERVICE_URL: "http://image-service:8083"
+      AUTH_SERVICE_URL: "http://auth-service:8081"
+      USER_SERVICE_URL: "http://user-service:8085"
+    networks:
+      - upsglam-net
+    ports:
+      - "8080:8080"
+
+networks:
+  upsglam-net:
+    name: upsglam-net

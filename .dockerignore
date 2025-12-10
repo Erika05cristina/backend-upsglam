@@ -1,0 +1,10 @@
+.git
+.gradle
+**/build
+**/.gradle
+**/tmp
+**/out
+*.iml
+.idea
+.vscode
+node_modules

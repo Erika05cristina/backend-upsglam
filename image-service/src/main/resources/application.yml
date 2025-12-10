@@ -2,9 +2,9 @@ server:
   port: 8083
 
 supabase:
-  url: https://jxmuivyjhglqrixbrsiw.supabase.co
-  anon-key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4bXVpdnlqaGdscXJpeGJyc2l3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTE3MDE3MCwiZXhwIjoyMDgwNzQ2MTcwfQ.S8SjWlfT7BRYcxCkUsstsvrZthQ8sOj_ZV5-w1Kje3w
-  bucket: images
-  
+  url: ${SUPABASE_URL:https://jxmuivyjhglqrixbrsiw.supabase.co}
+  anon-key: ${SUPABASE_ANON_KEY:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4bXVpdnlqaGdscXJpeGJyc2l3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTE3MDE3MCwiZXhwIjoyMDgwNzQ2MTcwfQ.S8SjWlfT7BRYcxCkUsstsvrZthQ8sOj_ZV5-w1Kje3w}
+  bucket: ${SUPABASE_BUCKET:images}
+
 python:
-  url: http://localhost:5000
+  url: ${PYTHON_URL:http://localhost:5000}
