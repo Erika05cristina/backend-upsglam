@@ -10,4 +10,4 @@ jwt:
 
 firebase:
   service-account-path: classpath:firebase-key.json
-
+  api-key: ${JWT_SECRET}
