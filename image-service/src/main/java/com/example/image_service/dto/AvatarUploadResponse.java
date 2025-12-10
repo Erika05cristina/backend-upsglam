@@ -7,4 +7,5 @@ import lombok.Data;
 @AllArgsConstructor
 public class AvatarUploadResponse {
     private String avatarUrl;
+    private long uploadedAt;
 }

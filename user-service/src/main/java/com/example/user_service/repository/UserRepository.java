@@ -55,6 +55,11 @@ public class UserRepository {
         }, Runnable::run);
 
         return Mono.fromCompletionStage(completable)
-                .map(doc -> doc.exists() ? doc.toObject(User.class) : null);
+                .flatMap(doc -> {
+                    if (!doc.exists()) {
+                        return Mono.empty();
+                    }
+                    return Mono.justOrEmpty(doc.toObject(User.class));
+                });
     }
 }

@@ -11,3 +11,6 @@ jwt:
 firebase:
   service-account-path: classpath:firebase-key.json
   api-key: ${JWT_SECRET}
+
+user-service:
+  base-url: ${USER_SERVICE_URL:http://localhost:8085}
