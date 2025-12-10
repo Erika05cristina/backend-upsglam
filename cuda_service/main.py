@@ -1,0 +1,36 @@
+# cuda_service/main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from cuda_service.routers import convolution
+
+app = FastAPI(
+    title="GPU Convolution API",
+    version="1.0.0"
+)
+
+origins = [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "*",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=[
+        "X-Width",
+        "X-Height",
+        "X-Filter-Type",
+        "X-Kernel-Size",
+        "X-GPU-Time-ms",
+    ],
+)
+
+app.include_router(convolution.router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("cuda_service.main:app", host="127.0.0.1", port=8000, reload=True)
