@@ -29,12 +29,6 @@ spring:
           predicates:
             - Path=/images/**  # Todo lo que empiece con /images va a image-service
           filters:
-        # 4) Ruta hacia el COMMENT-SERVICE
-        - id: comment-service
-          uri: http://localhost:8084
-          predicates:
-            - Path=/comments/**  # Todo lo que empiece con /comments va a comment-service
-          filters:
             - StripPrefix=0   # No cambiamos el path
         # 5) Ruta hacia el USERS-SERVICE
         - id: users-service

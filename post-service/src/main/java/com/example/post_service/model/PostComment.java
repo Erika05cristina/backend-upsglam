@@ -1,8 +1,5 @@
 package com.example.post_service.model;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,16 +9,9 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Post {
+public class PostComment {
     private String id;
     private String userId;
-    private String content;
-    private String imageUrl;
+    private String text;
     private long createdAt;
-
-    @Builder.Default
-    private List<String> likes = new ArrayList<>();
-
-    @Builder.Default
-    private List<PostComment> comments = new ArrayList<>();
 }

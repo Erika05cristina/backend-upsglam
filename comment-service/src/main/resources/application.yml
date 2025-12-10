@@ -1,9 +1,0 @@
-server:
-  port: 8084
-
-spring:
-  application:
-    name: comment-service
-
-firebase:
-  service-account-path: classpath:firebase-key.json
