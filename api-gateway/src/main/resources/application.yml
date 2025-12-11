@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      default-filters:
+        - PreserveHostHeader
+      routes:
+        - id: auth-service
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/auth/**
+          filters:
+            - StripPrefix=0
+        - id: post-service
+          uri: ${POST_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/posts/**
+        - id: image-service
+          uri: ${IMAGE_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/images/**
+          filters:
+            - StripPrefix=0
+        - id: users-service
+          uri: ${USER_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/users/**
+          filters:
+            - StripPrefix=0
+
+jwt:
+  secret: ${JWT_SECRET}

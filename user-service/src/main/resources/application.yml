@@ -4,3 +4,7 @@ server:
 spring:
   application:
     name: user-service
+
+firebase:
+  credentials:
+    location: ${FIREBASE_CREDENTIALS_LOCATION:classpath:firebase-key.json}
