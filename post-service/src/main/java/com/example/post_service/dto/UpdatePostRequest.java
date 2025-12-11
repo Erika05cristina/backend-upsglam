@@ -6,4 +6,5 @@ import lombok.Data;
 public class UpdatePostRequest {
     private String content;
     private String imageUrl;
+    private CudaMetadataDto cudaMetadata;
 }
