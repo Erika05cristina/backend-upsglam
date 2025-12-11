@@ -3,7 +3,6 @@ package com.example.post_service.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import com.example.post_service.client.UserServiceClient;
 import com.example.post_service.dto.CreateCommentRequest;
@@ -166,14 +165,17 @@ public class PostService {
     }
 
     private Mono<PostResponse> toResponseWithAuthor(Post post) {
-        return userServiceClient.getUserProfile(post.getUserId())
-                .defaultIfEmpty(UserProfile.fallback(post.getUserId()))
-                .map(profile -> buildResponse(post, profile));
+        Mono<UserProfile> authorMono = userServiceClient.getUserProfile(post.getUserId())
+                .defaultIfEmpty(UserProfile.fallback(post.getUserId()));
+
+        Mono<List<PostCommentResponse>> commentsMono = mapCommentsWithProfiles(post.getComments());
+
+        return Mono.zip(authorMono, commentsMono)
+                .map(tuple -> buildResponse(post, tuple.getT1(), tuple.getT2()));
     }
 
-    private PostResponse buildResponse(Post post, UserProfile profile) {
+    private PostResponse buildResponse(Post post, UserProfile profile, List<PostCommentResponse> comments) {
         List<String> likes = new ArrayList<>(post.getLikes());
-        List<PostCommentResponse> comments = mapComments(post.getComments());
 
         return PostResponse.builder()
                 .id(post.getId())
@@ -189,19 +191,23 @@ public class PostService {
                 .build();
     }
 
-    private List<PostCommentResponse> mapComments(List<PostComment> comments) {
+    private Mono<List<PostCommentResponse>> mapCommentsWithProfiles(List<PostComment> comments) {
         if (comments == null || comments.isEmpty()) {
-            return List.of();
+            return Mono.just(List.of());
         }
 
-        return comments.stream()
-                .map(comment -> PostCommentResponse.builder()
-                        .id(comment.getId())
-                        .userId(comment.getUserId())
-                        .text(comment.getText())
-                        .createdAt(comment.getCreatedAt())
-                        .build())
-                .collect(Collectors.toList());
+        return Flux.fromIterable(comments)
+                .flatMap(comment -> userServiceClient.getUserProfile(comment.getUserId())
+                        .defaultIfEmpty(UserProfile.fallback(comment.getUserId()))
+                        .map(profile -> PostCommentResponse.builder()
+                                .id(comment.getId())
+                                .userId(comment.getUserId())
+                                .authorName(profile.getName())
+                                .authorAvatarUrl(profile.getAvatarUrl())
+                                .text(comment.getText())
+                                .createdAt(comment.getCreatedAt())
+                                .build()))
+                .collectList();
     }
 
     private Mono<String> requireUser(String userId) {

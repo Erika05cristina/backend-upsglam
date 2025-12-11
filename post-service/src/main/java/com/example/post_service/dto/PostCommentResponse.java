@@ -8,6 +8,8 @@ import lombok.Value;
 public class PostCommentResponse {
     String id;
     String userId;
+    String authorName;
+    String authorAvatarUrl;
     String text;
     long createdAt;
 }
