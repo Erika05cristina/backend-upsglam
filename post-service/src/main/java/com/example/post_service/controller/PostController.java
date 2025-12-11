@@ -28,6 +28,13 @@ public class PostController {
         return postService.createPost(userId, request);
     }
 
+    @GetMapping("/feed")
+    public Mono<List<PostResponse>> getFeed(
+            @RequestHeader("X-User-Uid") String userId
+    ) {
+        return postService.getFeed(userId);
+    }
+
     @GetMapping("/{id}")
     public Mono<PostResponse> getPost(@PathVariable String id) {
         return postService.getPost(id);
