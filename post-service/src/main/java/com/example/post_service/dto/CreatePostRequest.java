@@ -9,4 +9,6 @@ public class CreatePostRequest {
 
     @NotBlank(message = "imageUrl es obligatorio")
     private String imageUrl; // recibido desde media-service o flutter
+
+    private CudaMetadataDto cudaMetadata;
 }

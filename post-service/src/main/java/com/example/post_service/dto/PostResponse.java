@@ -18,4 +18,5 @@ public class PostResponse {
     private int likeCount;
     private List<String> likes;
     private List<PostCommentResponse> comments;
+    private CudaMetadataDto cudaMetadata;
 }

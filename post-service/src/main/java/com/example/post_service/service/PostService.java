@@ -7,10 +7,12 @@ import java.util.UUID;
 import com.example.post_service.client.UserServiceClient;
 import com.example.post_service.dto.CreateCommentRequest;
 import com.example.post_service.dto.CreatePostRequest;
+import com.example.post_service.dto.CudaMetadataDto;
 import com.example.post_service.dto.PostCommentResponse;
 import com.example.post_service.dto.PostResponse;
 import com.example.post_service.dto.UpdatePostRequest;
 import com.example.post_service.dto.UserProfile;
+import com.example.post_service.model.CudaMetadata;
 import com.example.post_service.model.Post;
 import com.example.post_service.model.PostComment;
 import com.example.post_service.repository.PostRepository;
@@ -43,6 +45,7 @@ public class PostService {
                 .content(StringUtils.hasText(request.getContent()) ? request.getContent().trim() : null)
                 .imageUrl(request.getImageUrl().trim())
                 .createdAt(System.currentTimeMillis())
+                .cudaMetadata(toCudaMetadata(request.getCudaMetadata()))
                 .build())
             .flatMap(postRepository::save)
             .map(this::ensureCollections)
@@ -112,7 +115,7 @@ public class PostService {
     }
 
     public Mono<PostResponse> updatePost(String postId, String userId, UpdatePostRequest request) {
-        if (request == null || (request.getContent() == null && request.getImageUrl() == null)) {
+        if (request == null || (request.getContent() == null && request.getImageUrl() == null && request.getCudaMetadata() == null)) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nada que actualizar"));
         }
 
@@ -134,6 +137,10 @@ public class PostService {
                                     return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "imageUrl no puede estar vacío"));
                                 }
                                 existing.setImageUrl(request.getImageUrl().trim());
+                            }
+
+                            if (request.getCudaMetadata() != null) {
+                                existing.setCudaMetadata(toCudaMetadata(request.getCudaMetadata()));
                             }
 
                                 return postRepository.replace(existing)
@@ -188,6 +195,7 @@ public class PostService {
                 .likeCount(likes.size())
                 .likes(likes)
                 .comments(comments)
+                .cudaMetadata(toCudaMetadataDto(post.getCudaMetadata()))
                 .build();
     }
 
@@ -208,6 +216,51 @@ public class PostService {
                                 .createdAt(comment.getCreatedAt())
                                 .build()))
                 .collectList();
+    }
+
+    private CudaMetadata toCudaMetadata(CudaMetadataDto dto) {
+        if (dto == null) {
+            return null;
+        }
+
+        return CudaMetadata.builder()
+                .filterType(trimToNull(dto.getFilterType()))
+                .kernelSize(dto.getKernelSize())
+                .width(dto.getWidth())
+                .height(dto.getHeight())
+                .gpuTimeMs(dto.getGpuTimeMs())
+                .blocksX(dto.getBlocksX())
+                .blocksY(dto.getBlocksY())
+                .threadsX(dto.getThreadsX())
+                .threadsY(dto.getThreadsY())
+                .threadsPerBlock(dto.getThreadsPerBlock())
+                .build();
+    }
+
+    private CudaMetadataDto toCudaMetadataDto(CudaMetadata metadata) {
+        if (metadata == null) {
+            return null;
+        }
+
+        return CudaMetadataDto.builder()
+                .filterType(metadata.getFilterType())
+                .kernelSize(metadata.getKernelSize())
+                .width(metadata.getWidth())
+                .height(metadata.getHeight())
+                .gpuTimeMs(metadata.getGpuTimeMs())
+                .blocksX(metadata.getBlocksX())
+                .blocksY(metadata.getBlocksY())
+                .threadsX(metadata.getThreadsX())
+                .threadsY(metadata.getThreadsY())
+                .threadsPerBlock(metadata.getThreadsPerBlock())
+                .build();
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private Mono<String> requireUser(String userId) {

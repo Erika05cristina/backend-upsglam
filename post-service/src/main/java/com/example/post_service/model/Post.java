@@ -18,6 +18,7 @@ public class Post {
     private String content;
     private String imageUrl;
     private long createdAt;
+    private CudaMetadata cudaMetadata;
 
     @Builder.Default
     private List<String> likes = new ArrayList<>();
