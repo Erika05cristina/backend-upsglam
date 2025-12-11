@@ -8,16 +8,29 @@ import numpy as np
 from fastapi import HTTPException, UploadFile
 from PIL import Image
 
-from utils.image_utils import load_image_to_array
-from cuda.mask_builder import build_kernel, validate_kernel_vs_image
-from cuda.kernels import (
+from ..utils.image_utils import load_image_to_array
+from ..cuda.mask_builder import build_kernel, validate_kernel_vs_image
+from ..cuda.kernels import (
     run_sobel_gpu,
     run_convolution_gray_gpu,
     run_convolution_rgb_gpu,
     run_mean_rgb_gpu,
-    run_ups_filter_gpu
+    run_ups_filter_gpu,
+    run_oil_paint_gpu
 )
 
+UPS_FRAME_PATH = "cuda_service/assets/marco.png"
+
+try:
+    _ups_frame_base = Image.open(UPS_FRAME_PATH).convert("RGBA")
+except Exception as e:
+    _ups_frame_base = None
+    print(f"[WARN] No se pudo cargar el marco UPS: {e}")
+else:
+    alpha = _ups_frame_base.split()[3]
+    bbox = alpha.getbbox()
+    if bbox is not None:
+        _ups_frame_base = _ups_frame_base.crop(bbox)
 
 async def process_convolution(
     image: UploadFile,
@@ -32,6 +45,8 @@ async def process_convolution(
         * gaussian -> run_convolution_rgb_gpu (RGB)
         * emboss   -> run_convolution_gray_gpu (grayscale)
         * mean     -> run_mean_rgb_gpu (RGB, promedio NxN)
+        * ups         -> run_ups_filter_gpu (RGB)
+        * oil_paint   -> run_oil_paint_gpu (RGB, pintura al óleo)
     """
 
     # 1) Cargar imagen a NumPy (float32) en escala de grises
@@ -51,10 +66,22 @@ async def process_convolution(
 
     # 2) Validar filtro
     filter_type = filter_type.lower()
-    if filter_type not in {"gaussian", "sobel", "emboss", "mean", "ups"}:
+    valid_filters = {
+        "gaussian",
+        "sobel",
+        "emboss",
+        "mean",
+        "ups",
+        "oil_paint",
+    }
+    if filter_type not in valid_filters:
         raise HTTPException(
             status_code=400,
-            detail="filter_type debe ser uno de: 'gaussian', 'sobel', 'emboss', 'mean' o 'ups'."
+            detail=(
+                "filter_type debe ser uno de: "
+                "'gaussian', 'sobel', 'emboss', 'mean', 'ups', "
+                "'oil_paint'."
+            )
         )
 
     # 3) Validar que el kernel quepa en la imagen
@@ -98,10 +125,19 @@ async def process_convolution(
                 "K_first_values": K.flatten()[:12].tolist()
             }
     else:
-        # mean: no tiene kernel explícito, solo descripción
-        kernel_preview = {
-            "description": f"mean {kernel_size}x{kernel_size}"
-        }
+        # Filtros sin kernel explícito
+        if filter_type == "mean":
+            kernel_preview = {
+                "description": f"mean {kernel_size}x{kernel_size}"
+            }
+        elif filter_type == "ups":
+            kernel_preview = {
+                "description": "UPS institutional color filter (blue+yellow)"
+            }
+        elif filter_type == "oil_paint":
+            kernel_preview = {
+                "description": f"Oil paint filter, window {kernel_size}x{kernel_size}"
+            }
 
     # 6) Ejecutar filtro en GPU según tipo
     gpu_time_ms = None
@@ -157,6 +193,7 @@ async def process_convolution(
         pil_img = Image.open(image.file).convert("RGB")
         img_rgb_u8 = np.array(pil_img).astype(np.uint8)
 
+        # 1) Aplicar filtro UPS en GPU
         out_rgb_u8, gpu_time_ms = run_ups_filter_gpu(
             img_rgb_u8=img_rgb_u8,
             threads_x=threads_x,
@@ -165,12 +202,45 @@ async def process_convolution(
             blocks_y=blocks_y,
         )
 
-        out_u8 = out_rgb_u8
+        # 2) Superponer marco escalado exactamente al tamaño de la imagen
+        if _ups_frame_base is not None:
+            h, w, _ = out_rgb_u8.shape
 
-        # kernel_preview solo para info
+            # Resultado de CUDA a RGBA
+            base_rgba = Image.fromarray(out_rgb_u8).convert("RGBA")
+
+            # Redimensionar el marco DIRECTAMENTE al tamaño de la imagen (sin recortes)
+            frame_resized = _ups_frame_base.resize((w, h), Image.LANCZOS)
+
+            # Componer (respeta la transparencia del PNG)
+            composed = Image.alpha_composite(base_rgba, frame_resized)
+
+            # Volver a uint8 para el resto del flujo
+            out_u8 = np.array(composed.convert("RGB")).astype(np.uint8)
+        else:
+            # Si falla la carga del marco, seguimos solo con el filtro UPS
+            out_u8 = out_rgb_u8
+
         kernel_preview = {
-            "description": "UPS institutional color filter (blue+yellow)"
+            "description": "UPS institutional color filter (blue+yellow) + frame"
         }
+
+    elif filter_type == "oil_paint":
+        # --- FILTRO PINTURA AL ÓLEO (RGB) ---
+        image.file.seek(0)
+        pil_img = Image.open(image.file).convert("RGB")
+        img_rgb_u8 = np.array(pil_img).astype(np.uint8)
+
+        out_rgb_u8, gpu_time_ms = run_oil_paint_gpu(
+            img_rgb_u8=img_rgb_u8,
+            kernel_size=kernel_size,
+            threads_x=threads_x,
+            threads_y=threads_y,
+            blocks_x=blocks_x,
+            blocks_y=blocks_y,
+        )
+
+        out_u8 = out_rgb_u8
 
     else:
         # --- EMBOSS en escala de grises ---

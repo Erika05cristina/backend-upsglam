@@ -535,3 +535,176 @@ def run_convolution_rgb_gpu(
 
     gpu_time_ms = float(sum(tiempos) / len(tiempos))
     return out_rgb, gpu_time_ms
+
+OIL_PAINT_KERNEL = r"""
+#define NUM_BINS 32
+
+extern "C"
+__global__ void oil_paint(
+    const unsigned char* img_in,   // RGB, tamaño width * height * 3
+    unsigned char* img_out,        // RGB
+    int width,
+    int height,
+    int kernel_radius              // (kernel_size // 2)
+){
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x >= width || y >= height) {
+        return;
+    }
+
+    int hist[NUM_BINS];
+    int sumR[NUM_BINS];
+    int sumG[NUM_BINS];
+    int sumB[NUM_BINS];
+
+    // Inicializar histogramas y acumuladores
+    for (int i = 0; i < NUM_BINS; ++i) {
+        hist[i] = 0;
+        sumR[i] = 0;
+        sumG[i] = 0;
+        sumB[i] = 0;
+    }
+
+    int x_start = x - kernel_radius;
+    int x_end   = x + kernel_radius;
+    int y_start = y - kernel_radius;
+    int y_end   = y + kernel_radius;
+
+    // Clampear a bordes de la imagen
+    if (x_start < 0) x_start = 0;
+    if (y_start < 0) y_start = 0;
+    if (x_end >= width)  x_end = width - 1;
+    if (y_end >= height) y_end = height - 1;
+
+    // Recorrer vecindario
+    for (int j = y_start; j <= y_end; ++j) {
+        for (int i = x_start; i <= x_end; ++i) {
+            int idx = (j * width + i) * 3;
+
+            unsigned char r = img_in[idx];
+            unsigned char g = img_in[idx + 1];
+            unsigned char b = img_in[idx + 2];
+
+            int intensity = ((int)r + (int)g + (int)b) / 3;
+
+            int bin = (intensity * NUM_BINS) / 256;
+            if (bin >= NUM_BINS) {
+                bin = NUM_BINS - 1;
+            }
+
+            hist[bin] += 1;
+            sumR[bin] += (int)r;
+            sumG[bin] += (int)g;
+            sumB[bin] += (int)b;
+        }
+    }
+
+    // Encontrar el bin dominante
+    int maxBin = 0;
+    int maxCount = 0;
+    for (int k = 0; k < NUM_BINS; ++k) {
+        if (hist[k] > maxCount) {
+            maxCount = hist[k];
+            maxBin = k;
+        }
+    }
+
+    int outR, outG, outB;
+
+    if (maxCount > 0) {
+        outR = sumR[maxBin] / maxCount;
+        outG = sumG[maxBin] / maxCount;
+        outB = sumB[maxBin] / maxCount;
+    } else {
+        // Caso raro: sin píxeles en el vecindario (no debería pasar),
+        // copiamos el valor original
+        int idx_center = (y * width + x) * 3;
+        outR = (int)img_in[idx_center];
+        outG = (int)img_in[idx_center + 1];
+        outB = (int)img_in[idx_center + 2];
+    }
+
+    int outIdx = (y * width + x) * 3;
+    img_out[outIdx]     = (unsigned char)outR;
+    img_out[outIdx + 1] = (unsigned char)outG;
+    img_out[outIdx + 2] = (unsigned char)outB;
+}
+""";
+
+_mod = SourceModule(OIL_PAINT_KERNEL)
+_oil_paint_kernel = _mod.get_function("oil_paint")
+
+def run_oil_paint_gpu(
+    img_rgb_u8: np.ndarray,
+    kernel_size: int,
+    threads_x: int,
+    threads_y: int,
+    blocks_x: int,
+    blocks_y: int,
+):
+    """
+    Ejecuta el filtro de pintura al óleo en GPU.
+
+    Parámetros:
+        img_rgb_u8 : np.ndarray (H, W, 3), dtype uint8
+        kernel_size: tamaño de la ventana (impar: 3,5,7,...)
+        threads_x, threads_y, blocks_x, blocks_y: configuración CUDA
+
+    Retorna:
+        out_rgb_u8 : np.ndarray (H, W, 3), uint8
+        gpu_time_ms: float
+    """
+    if img_rgb_u8.dtype != np.uint8:
+        raise ValueError("img_rgb_u8 debe ser uint8")
+    if img_rgb_u8.ndim != 3 or img_rgb_u8.shape[2] != 3:
+        raise ValueError("img_rgb_u8 debe tener forma (H, W, 3)")
+
+    height, width, channels = img_rgb_u8.shape
+    kernel_radius = kernel_size // 2
+
+    # Aplanar para mandar a la GPU
+    img_in_flat = img_rgb_u8.reshape(-1)
+    img_out_flat = np.empty_like(img_in_flat)
+
+    # Reservar memoria en GPU
+    d_in = drv.mem_alloc(img_in_flat.nbytes)
+    d_out = drv.mem_alloc(img_out_flat.nbytes)
+
+    # Copiar a GPU
+    drv.memcpy_htod(d_in, img_in_flat)
+
+    block = (int(threads_x), int(threads_y), 1)
+    grid = (int(blocks_x), int(blocks_y), 1)
+
+    # Medir tiempo en GPU
+    start_evt = drv.Event()
+    end_evt = drv.Event()
+
+    start_evt.record()
+
+    _oil_paint_kernel(
+        d_in,
+        d_out,
+        np.int32(width),
+        np.int32(height),
+        np.int32(kernel_radius),
+        block=block,
+        grid=grid,
+    )
+
+    end_evt.record()
+    end_evt.synchronize()
+    gpu_time_ms = start_evt.time_till(end_evt)
+
+    # Copiar resultado al host
+    drv.memcpy_dtoh(img_out_flat, d_out)
+
+    # Liberar memoria en GPU
+    d_in.free()
+    d_out.free()
+
+    out_rgb_u8 = img_out_flat.reshape((height, width, 3))
+
+    return out_rgb_u8, float(gpu_time_ms)
