@@ -10,6 +10,8 @@ import lombok.Data;
 public class PostResponse {
     private String id;
     private String userId;
+    private String authorName;
+    private String authorAvatarUrl;
     private String content;
     private String imageUrl;
     private long createdAt;

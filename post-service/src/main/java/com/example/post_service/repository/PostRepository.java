@@ -72,6 +72,22 @@ public class PostRepository {
             .map(query -> query.toObjects(Post.class));
         }
 
+            public Mono<Post> replace(Post post) {
+            ApiFuture<WriteResult> write = postsCollection()
+                .document(post.getId())
+                .set(post);
+
+            return monoFromApiFuture(write).thenReturn(post);
+            }
+
+            public Mono<Void> deleteById(String postId) {
+            ApiFuture<WriteResult> write = postsCollection()
+                .document(postId)
+                .delete();
+
+            return monoFromApiFuture(write).then();
+            }
+
     public Mono<Void> addLike(String postId, String userId) {
         ApiFuture<WriteResult> update = postsCollection()
                 .document(postId)
