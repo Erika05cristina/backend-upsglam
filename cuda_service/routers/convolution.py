@@ -5,7 +5,7 @@ from fastapi import APIRouter, UploadFile, File, Form
 from fastapi.responses import Response
 from fastapi.responses import JSONResponse
 
-from cuda_service.services.convolution_service import process_convolution
+from services.convolution_service import process_convolution
 
 router = APIRouter(
     prefix="/api",

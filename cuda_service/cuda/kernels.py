@@ -5,7 +5,7 @@ import pycuda.autoinit  # inicializa contexto
 import pycuda.driver as drv
 from pycuda.compiler import SourceModule
 
-from cuda_service.cuda.mask_builder import generate_sobel_masks
+from .mask_builder import generate_sobel_masks
 
 UPS_FILTER_KERNEL_CODE = r"""
 __global__ void ups_color_highlight(

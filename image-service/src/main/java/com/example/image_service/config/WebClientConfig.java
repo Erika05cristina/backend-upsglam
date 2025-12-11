@@ -20,10 +20,10 @@ public class WebClientConfig {
         return WebClient.builder()
                 .baseUrl(pythonUrl)
                 .codecs(configurer ->
-                        configurer
-                                .defaultCodecs()
-                                // por ejemplo 10 MB
-                                .maxInMemorySize(10 * 1024 * 1024)
+                    configurer
+                        .defaultCodecs()
+                        // aumentar límite a 50 MB para respuestas grandes
+                        .maxInMemorySize(50 * 1024 * 1024)
                 )
                 .build();
     }
