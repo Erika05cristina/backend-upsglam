@@ -4,3 +4,6 @@ server:
 spring:
   application:
     name: post-service
+
+user-service:
+  url: ${USER_SERVICE_URL:http://localhost:8085}

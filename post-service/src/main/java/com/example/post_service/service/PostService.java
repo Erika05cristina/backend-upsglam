@@ -5,10 +5,13 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import com.example.post_service.dto.CreatePostRequest;
+import com.example.post_service.client.UserServiceClient;
 import com.example.post_service.dto.CreateCommentRequest;
+import com.example.post_service.dto.CreatePostRequest;
 import com.example.post_service.dto.PostCommentResponse;
 import com.example.post_service.dto.PostResponse;
+import com.example.post_service.dto.UpdatePostRequest;
+import com.example.post_service.dto.UserProfile;
 import com.example.post_service.model.Post;
 import com.example.post_service.model.PostComment;
 import com.example.post_service.repository.PostRepository;
@@ -20,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -27,8 +31,9 @@ import reactor.core.publisher.Mono;
 public class PostService {
 
     private final PostRepository postRepository;
+    private final UserServiceClient userServiceClient;
 
-        public Mono<PostResponse> createPost(String userId, CreatePostRequest request) {
+    public Mono<PostResponse> createPost(String userId, CreatePostRequest request) {
         if (request == null || !StringUtils.hasText(request.getImageUrl())) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "imageUrl es obligatorio"));
         }
@@ -42,50 +47,50 @@ public class PostService {
                 .build())
             .flatMap(postRepository::save)
             .map(this::ensureCollections)
-            .map(this::toResponse);
+            .flatMap(this::toResponseWithAuthor);
     }
 
     public Mono<PostResponse> getPost(String id) {
         return postRepository.findById(id)
                 .map(this::ensureCollections)
-                .map(this::toResponse)
+                .flatMap(this::toResponseWithAuthor)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Post no encontrado")));
     }
 
-        public Mono<List<PostResponse>> getAllPosts() {
+    public Mono<List<PostResponse>> getAllPosts() {
         return postRepository.findAll()
-            .defaultIfEmpty(List.of())
-            .map(posts -> posts.stream()
-                .map(this::ensureCollections)
-                .map(this::toResponse)
-                .collect(Collectors.toList()));
-        }
-
-            public Mono<List<PostResponse>> getPostsByUser(String userId) {
-            return requireUser(userId)
-                .flatMap(postRepository::findByUserId)
                 .defaultIfEmpty(List.of())
-                .map(posts -> posts.stream()
-                    .map(this::ensureCollections)
-                    .map(this::toResponse)
-                    .collect(Collectors.toList()));
+                .flatMap(posts -> Flux.fromIterable(posts)
+                        .map(this::ensureCollections)
+                        .flatMap(this::toResponseWithAuthor)
+                        .collectList());
     }
 
-        public Mono<PostResponse> likePost(String postId, String userId) {
+    public Mono<List<PostResponse>> getPostsByUser(String userId) {
+        return requireUser(userId)
+                .flatMap(postRepository::findByUserId)
+                .defaultIfEmpty(List.of())
+                .flatMap(posts -> Flux.fromIterable(posts)
+                        .map(this::ensureCollections)
+                .flatMap(this::toResponseWithAuthor)
+                .collectList());
+    }
+
+    public Mono<PostResponse> likePost(String postId, String userId) {
         return requireUser(userId)
             .flatMap(validUserId -> postRepository.addLike(postId, validUserId)
                 .onErrorMap(throwable -> translateFirestoreException(throwable, postId)))
             .then(getPost(postId));
-        }
+    }
 
-        public Mono<PostResponse> unlikePost(String postId, String userId) {
+    public Mono<PostResponse> unlikePost(String postId, String userId) {
         return requireUser(userId)
             .flatMap(validUserId -> postRepository.removeLike(postId, validUserId)
                 .onErrorMap(throwable -> translateFirestoreException(throwable, postId)))
             .then(getPost(postId));
-        }
+    }
 
-        public Mono<PostResponse> addComment(String postId, String userId, CreateCommentRequest request) {
+    public Mono<PostResponse> addComment(String postId, String userId, CreateCommentRequest request) {
         if (request == null || !StringUtils.hasText(request.getText())) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "El comentario no puede estar vacío"));
         }
@@ -105,7 +110,50 @@ public class PostService {
             .flatMap(comment -> postRepository.addComment(postId, comment)
                 .onErrorMap(throwable -> translateFirestoreException(throwable, postId)))
             .then(getPost(postId));
+    }
+
+    public Mono<PostResponse> updatePost(String postId, String userId, UpdatePostRequest request) {
+        if (request == null || (request.getContent() == null && request.getImageUrl() == null)) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nada que actualizar"));
         }
+
+        return requireUser(userId)
+                .flatMap(validUserId -> postRepository.findById(postId)
+                        .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Post no encontrado")))
+                        .flatMap(existing -> {
+                            if (!validUserId.equals(existing.getUserId())) {
+                                return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "No puedes editar este post"));
+                            }
+
+                            if (request.getContent() != null) {
+                                String content = request.getContent().trim();
+                                existing.setContent(StringUtils.hasText(content) ? content : null);
+                            }
+
+                            if (request.getImageUrl() != null) {
+                                if (!StringUtils.hasText(request.getImageUrl())) {
+                                    return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "imageUrl no puede estar vacío"));
+                                }
+                                existing.setImageUrl(request.getImageUrl().trim());
+                            }
+
+                                return postRepository.replace(existing)
+                                    .map(this::ensureCollections)
+                                    .flatMap(this::toResponseWithAuthor);
+                        }));
+    }
+
+    public Mono<Void> deletePost(String postId, String userId) {
+        return requireUser(userId)
+                .flatMap(validUserId -> postRepository.findById(postId)
+                        .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Post no encontrado")))
+                        .flatMap(existing -> {
+                            if (!validUserId.equals(existing.getUserId())) {
+                                return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "No puedes eliminar este post"));
+                            }
+                            return postRepository.deleteById(postId);
+                        }));
+    }
 
     private Post ensureCollections(Post post) {
         if (post.getLikes() == null) {
@@ -117,13 +165,21 @@ public class PostService {
         return post;
     }
 
-    private PostResponse toResponse(Post post) {
+    private Mono<PostResponse> toResponseWithAuthor(Post post) {
+        return userServiceClient.getUserProfile(post.getUserId())
+                .defaultIfEmpty(UserProfile.fallback(post.getUserId()))
+                .map(profile -> buildResponse(post, profile));
+    }
+
+    private PostResponse buildResponse(Post post, UserProfile profile) {
         List<String> likes = new ArrayList<>(post.getLikes());
         List<PostCommentResponse> comments = mapComments(post.getComments());
 
         return PostResponse.builder()
                 .id(post.getId())
                 .userId(post.getUserId())
+                .authorName(profile.getName())
+                .authorAvatarUrl(profile.getAvatarUrl())
                 .content(post.getContent())
                 .imageUrl(post.getImageUrl())
                 .createdAt(post.getCreatedAt())

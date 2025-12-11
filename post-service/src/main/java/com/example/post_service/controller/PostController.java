@@ -3,6 +3,7 @@ package com.example.post_service.controller;
 import com.example.post_service.dto.CreateCommentRequest;
 import com.example.post_service.dto.CreatePostRequest;
 import com.example.post_service.dto.PostResponse;
+import com.example.post_service.dto.UpdatePostRequest;
 import com.example.post_service.service.PostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,23 @@ public class PostController {
     @GetMapping("/user/{userId}")
     public Mono<List<PostResponse>> getPostsByUser(@PathVariable String userId) {
         return postService.getPostsByUser(userId);
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<PostResponse> updatePost(
+            @PathVariable String id,
+            @RequestHeader("X-User-Uid") String userId,
+            @RequestBody UpdatePostRequest request
+    ) {
+        return postService.updatePost(id, userId, request);
+    }
+
+    @DeleteMapping("/{id}")
+    public Mono<Void> deletePost(
+            @PathVariable String id,
+            @RequestHeader("X-User-Uid") String userId
+    ) {
+        return postService.deletePost(id, userId);
     }
 
     @PostMapping("/{id}/likes")
