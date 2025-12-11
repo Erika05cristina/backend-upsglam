@@ -13,5 +13,7 @@ public class User {
     private String bio;
     private String avatarUrl;
     private List<String> avatarHistory = new ArrayList<>();
+    private List<String> followers = new ArrayList<>();
+    private List<String> following = new ArrayList<>();
     private long createdAt;
 }

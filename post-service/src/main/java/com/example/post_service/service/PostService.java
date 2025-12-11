@@ -74,8 +74,48 @@ public class PostService {
                 .defaultIfEmpty(List.of())
                 .flatMap(posts -> Flux.fromIterable(posts)
                         .map(this::ensureCollections)
-                .flatMap(this::toResponseWithAuthor)
-                .collectList());
+                        .flatMap(this::toResponseWithAuthor)
+                        .collectList());
+    }
+
+    public Mono<List<PostResponse>> getFeed(String userId) {
+        return requireUser(userId)
+                .flatMap(validUserId -> userServiceClient.getFollowingIds(validUserId)
+                        .map(following -> {
+                            List<String> ids = new ArrayList<>(following);
+                            if (!ids.contains(validUserId)) {
+                                ids.add(validUserId);
+                            }
+                            return ids;
+                        })
+                        .flatMap(ids -> {
+                            if (ids.isEmpty()) {
+                                return Mono.just(List.of());
+                            }
+
+                            return Flux.fromIterable(ids)
+                                    .distinct()
+                                    .flatMapSequential(postRepository::findByUserId)
+                                    .flatMapIterable(list -> list)
+                                    .map(this::ensureCollections)
+                                    .collectList()
+                                    .flatMap(posts -> {
+                                        if (posts.isEmpty()) {
+                                            return Mono.just(List.of());
+                                        }
+
+                                        List<Post> sorted = new ArrayList<>(posts);
+                                        sorted.sort((a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()));
+
+                                        List<Post> limited = sorted.size() > 50
+                                                ? new ArrayList<>(sorted.subList(0, 50))
+                                                : sorted;
+
+                                        return Flux.fromIterable(limited)
+                                                .flatMapSequential(this::toResponseWithAuthor)
+                                                .collectList();
+                                    });
+                        }));
     }
 
     public Mono<PostResponse> likePost(String postId, String userId) {
@@ -143,7 +183,7 @@ public class PostService {
                                 existing.setCudaMetadata(toCudaMetadata(request.getCudaMetadata()));
                             }
 
-                                return postRepository.replace(existing)
+                            return postRepository.replace(existing)
                                     .map(this::ensureCollections)
                                     .flatMap(this::toResponseWithAuthor);
                         }));
