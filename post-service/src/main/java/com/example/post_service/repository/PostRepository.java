@@ -62,31 +62,32 @@ public class PostRepository {
                 .map(query -> query.toObjects(Post.class));
     }
 
-        public Mono<List<Post>> findByUserId(String userId) {
+    public Mono<List<Post>> findByUserId(String userId) {
         ApiFuture<QuerySnapshot> read = postsCollection()
-            .whereEqualTo("userId", userId)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .get();
+                .whereEqualTo("userId", userId)
+                // .orderBy("createdAt", Query.Direction.DESCENDING) // Retirado temporalmente
+                // por falta de índice
+                .get();
 
         return monoFromApiFuture(read)
-            .map(query -> query.toObjects(Post.class));
-        }
+                .map(query -> query.toObjects(Post.class));
+    }
 
-            public Mono<Post> replace(Post post) {
-            ApiFuture<WriteResult> write = postsCollection()
+    public Mono<Post> replace(Post post) {
+        ApiFuture<WriteResult> write = postsCollection()
                 .document(post.getId())
                 .set(post);
 
-            return monoFromApiFuture(write).thenReturn(post);
-            }
+        return monoFromApiFuture(write).thenReturn(post);
+    }
 
-            public Mono<Void> deleteById(String postId) {
-            ApiFuture<WriteResult> write = postsCollection()
+    public Mono<Void> deleteById(String postId) {
+        ApiFuture<WriteResult> write = postsCollection()
                 .document(postId)
                 .delete();
 
-            return monoFromApiFuture(write).then();
-            }
+        return monoFromApiFuture(write).then();
+    }
 
     public Mono<Void> addLike(String postId, String userId) {
         ApiFuture<WriteResult> update = postsCollection()
@@ -109,8 +110,7 @@ public class PostRepository {
                 "id", comment.getId(),
                 "userId", comment.getUserId(),
                 "text", comment.getText(),
-                "createdAt", comment.getCreatedAt()
-        );
+                "createdAt", comment.getCreatedAt());
 
         ApiFuture<WriteResult> update = postsCollection()
                 .document(postId)
@@ -125,16 +125,16 @@ public class PostRepository {
 
     private <T> Mono<T> monoFromApiFuture(ApiFuture<T> future) {
         return Mono.<T>create(sink -> future.addListener(() -> {
-                    try {
-                        sink.success(future.get());
-                    } catch (InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                        sink.error(ex);
-                    } catch (ExecutionException ex) {
-                        Throwable cause = ex.getCause();
-                        sink.error(cause != null ? cause : ex);
-                    }
-                }, command -> Schedulers.boundedElastic().schedule(command)))
+            try {
+                sink.success(future.get());
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                sink.error(ex);
+            } catch (ExecutionException ex) {
+                Throwable cause = ex.getCause();
+                sink.error(cause != null ? cause : ex);
+            }
+        }, command -> Schedulers.boundedElastic().schedule(command)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 }
