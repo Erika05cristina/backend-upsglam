@@ -5,6 +5,8 @@ import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.WriteResult;
+import com.google.cloud.firestore.Query;
+import com.google.cloud.firestore.QuerySnapshot;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
@@ -61,5 +63,32 @@ public class UserRepository {
                     }
                     return Mono.justOrEmpty(doc.toObject(User.class));
                 });
+    }
+
+    public Mono<User> findByUsername(String username) {
+        ApiFuture<QuerySnapshot> apiFuture =
+                firestore.collection("users")
+                        .whereEqualTo("username", username)
+                        .limit(1)
+                        .get();
+
+        return monoFromApiFuture(apiFuture)
+                .flatMap(snapshot -> {
+                    if (snapshot.isEmpty()) {
+                        return Mono.empty();
+                    }
+                    DocumentSnapshot doc = snapshot.getDocuments().get(0);
+                    return Mono.justOrEmpty(doc.toObject(User.class));
+                });
+    }
+
+    public Mono<List<User>> findAll() {
+        ApiFuture<QuerySnapshot> apiFuture =
+                firestore.collection("users")
+                        .orderBy("createdAt", Query.Direction.DESCENDING)
+                        .get();
+
+        return monoFromApiFuture(apiFuture)
+                .map(query -> query.toObjects(User.class));
     }
 }

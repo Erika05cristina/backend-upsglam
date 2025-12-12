@@ -27,6 +27,11 @@ public class UserController {
         return service.createUser(userId, req);
     }
 
+    @GetMapping
+    public Mono<java.util.List<User>> listUsers() {
+        return service.listUsers();
+    }
+
     @PutMapping("/{id}")
     public Mono<User> update(
             @PathVariable String id,
@@ -38,6 +43,11 @@ public class UserController {
     @GetMapping("/{id}")
     public Mono<User> getUser(@PathVariable String id) {
         return service.getUser(id);
+    }
+
+    @GetMapping("/lookup")
+    public Mono<User> getUserByUsername(@RequestParam("username") String username) {
+        return service.getUserByUsername(username);
     }
 
     @PostMapping("/{id}/avatars")

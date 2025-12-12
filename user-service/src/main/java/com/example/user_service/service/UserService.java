@@ -69,6 +69,20 @@ public class UserService {
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado")));
     }
 
+    public Mono<List<User>> listUsers() {
+        return repo.findAll()
+                .map(list -> list.isEmpty() ? List.of() : List.copyOf(list));
+    }
+
+    public Mono<User> getUserByUsername(String username) {
+        if (!StringUtils.hasText(username)) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "username es requerido"));
+        }
+
+        return repo.findByUsername(username.trim())
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado")));
+    }
+
     public Mono<FollowActionResponse> followUser(String currentUserId, String targetUserId) {
         if (!StringUtils.hasText(currentUserId)) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-User-Uid es requerido"));
