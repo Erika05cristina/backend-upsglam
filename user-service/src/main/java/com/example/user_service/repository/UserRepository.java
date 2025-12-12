@@ -4,11 +4,14 @@ import com.example.user_service.model.User;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.Query;
+import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.WriteResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Repository
@@ -61,5 +64,52 @@ public class UserRepository {
                     }
                     return Mono.justOrEmpty(doc.toObject(User.class));
                 });
+    }
+
+    public Mono<User> findByUsername(String username) {
+        ApiFuture<QuerySnapshot> apiFuture =
+                firestore.collection("users")
+                        .whereEqualTo("username", username)
+                        .limit(1)
+                        .get();
+
+        CompletableFuture<QuerySnapshot> completable = new CompletableFuture<>();
+
+        apiFuture.addListener(() -> {
+            try {
+                completable.complete(apiFuture.get());
+            } catch (Exception e) {
+                completable.completeExceptionally(e);
+            }
+        }, Runnable::run);
+
+        return Mono.fromCompletionStage(completable)
+            .flatMap(snapshot -> {
+                    if (snapshot.isEmpty()) {
+                        return Mono.empty();
+                    }
+                    DocumentSnapshot doc = snapshot.getDocuments().get(0);
+                    return Mono.justOrEmpty(doc.toObject(User.class));
+                });
+    }
+
+    public Mono<List<User>> findAll() {
+        ApiFuture<QuerySnapshot> apiFuture =
+                firestore.collection("users")
+                        .orderBy("createdAt", Query.Direction.DESCENDING)
+                        .get();
+
+        CompletableFuture<QuerySnapshot> completable = new CompletableFuture<>();
+
+        apiFuture.addListener(() -> {
+            try {
+                completable.complete(apiFuture.get());
+            } catch (Exception e) {
+                completable.completeExceptionally(e);
+            }
+        }, Runnable::run);
+
+        return Mono.fromCompletionStage(completable)
+            .map(query -> query.toObjects(User.class));
     }
 }
