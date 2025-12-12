@@ -8,6 +8,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
+# (Opcional pero ordenado: aseguramos PATH de CUDA)
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=${CUDA_HOME}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3.11 python3.11-dev python3-pip python3-venv python3-distutils \

@@ -8,9 +8,9 @@ import numpy as np
 from fastapi import HTTPException, UploadFile
 from PIL import Image
 
-from ..utils.image_utils import load_image_to_array
-from ..cuda.mask_builder import build_kernel, validate_kernel_vs_image
-from ..cuda.kernels import (
+from utils.image_utils import load_image_to_array
+from cuda.mask_builder import build_kernel, validate_kernel_vs_image
+from cuda.kernels import (
     run_sobel_gpu,
     run_convolution_gray_gpu,
     run_convolution_rgb_gpu,
