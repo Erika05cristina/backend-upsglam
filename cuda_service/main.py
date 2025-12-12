@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import convolution
+from routers import convolution
 
 app = FastAPI(
     title="GPU Convolution API",
