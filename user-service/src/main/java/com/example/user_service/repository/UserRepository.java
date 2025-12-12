@@ -4,13 +4,14 @@ import com.example.user_service.model.User;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.WriteResult;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QuerySnapshot;
+import com.google.cloud.firestore.WriteResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Repository
@@ -72,8 +73,18 @@ public class UserRepository {
                         .limit(1)
                         .get();
 
-        return monoFromApiFuture(apiFuture)
-                .flatMap(snapshot -> {
+        CompletableFuture<QuerySnapshot> completable = new CompletableFuture<>();
+
+        apiFuture.addListener(() -> {
+            try {
+                completable.complete(apiFuture.get());
+            } catch (Exception e) {
+                completable.completeExceptionally(e);
+            }
+        }, Runnable::run);
+
+        return Mono.fromCompletionStage(completable)
+            .flatMap(snapshot -> {
                     if (snapshot.isEmpty()) {
                         return Mono.empty();
                     }
@@ -88,7 +99,17 @@ public class UserRepository {
                         .orderBy("createdAt", Query.Direction.DESCENDING)
                         .get();
 
-        return monoFromApiFuture(apiFuture)
-                .map(query -> query.toObjects(User.class));
+        CompletableFuture<QuerySnapshot> completable = new CompletableFuture<>();
+
+        apiFuture.addListener(() -> {
+            try {
+                completable.complete(apiFuture.get());
+            } catch (Exception e) {
+                completable.completeExceptionally(e);
+            }
+        }, Runnable::run);
+
+        return Mono.fromCompletionStage(completable)
+            .map(query -> query.toObjects(User.class));
     }
 }
